@@ -1,0 +1,862 @@
+/*
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * NVIDIA CORPORATION and its licensors retain all intellectual property
+ * and proprietary rights in and to this software, related documentation
+ * and any modifications thereto.  Any use, reproduction, disclosure or
+ * distribution of this software and related documentation without an express
+ * license agreement from NVIDIA CORPORATION is strictly prohibited.
+ */
+
+syntax = "proto3";
+
+package nvidia.clara.platform;
+
+option csharp_namespace = "Nvidia.Clara.Platform.Grpc";
+option go_package = "apis";
+option java_package = "com.nvidia.clara.platform";
+
+// 128-bit unique identifier (GUID).
+message Identifier {
+  // Expected to be a 32-character string of hexadecimal legal characters.
+  string value = 1;
+}
+
+// Version information structure.
+message Version {
+  int32 major = 1;
+  int32 minor = 2;
+  int32 patch = 3;
+  string label = 4;
+}
+
+// Standard header expected to be attached to all requests.
+message RequestHeader {
+  // Version of the API expected to handle the request.
+  Version api_version = 1;
+  // Name of the agent interacting with Clara.
+  string user_agent = 2;
+}
+
+// Return value of most API calls, specifies success or failure.
+message ResponseHeader {
+  // The "error" code; with 0 often meaning success.
+  sint32 code = 1;
+  // Optional message(s) returned with the result.
+  repeated string messages = 2;
+}
+
+// Timestamp type
+message Timestamp {
+  // The number of seconds before or after 0001-01-01 00:00:00Z.
+  sint64 value = 1;
+}
+
+// Parameters for Clara::Stop rpc.
+message ClaraStopRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+}
+
+// Results of Clara::Stop rpc.
+message ClaraStopResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+}
+
+// Parameters for Clara::Version rpc.
+message ClaraVersionRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+}
+
+// Results of Clara::Version rpc.
+message ClaraVersionResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+
+  // Version of Clara Platform
+  Version version = 2;
+}
+
+service Clara {
+  // Requests resource cleanup.
+  rpc Stop(ClaraStopRequest) returns (ClaraStopResponse);
+  rpc Version(ClaraVersionRequest) returns (ClaraVersionResponse);
+}
+
+
+// Status of a job operator.
+enum JobOperatorStatus {
+  // The job operator status is unknown.
+  JOB_OPERATOR_STATUS_UNKNOWN = 0;
+
+  // The job operator has initialized and is waiting to begin execution.
+  JOB_OPERATOR_STATUS_PENDING = 1;
+
+  // The job operator is currently executing.
+  JOB_OPERATOR_STATUS_RUNNING = 2;
+
+  // The job operator has stopped and completed successfully.
+  JOB_OPERATOR_STATUS_COMPLETED = 3;
+
+  // The job operator has stopped and is reporting a failure.
+  JOB_OPERATOR_STATUS_FAULTED = 4;
+}
+
+// Priority of a job.
+enum JobPriority {
+  // The job priority is unknown.
+  JOB_PRIORITY_UNKNOWN = 0;
+
+  // The job priority is lower than normal.
+  // Lower priority jobs are queued like higher priority jobs.
+  // Lower priority jobs are scheduled for execution less frequently than higher priority jobs.
+  JOB_PRIORITY_LOWER = 1;
+
+  // The job priority is normal, the default priority for new jobs.
+  JOB_PRIORITY_NORMAL = 2;
+
+  // The job priority is higer than normal.
+  // Higher priority jobs are queued like lower priority jobs.
+  // Higher priority jobs are scheduled for execution more frequently than lower priority jobs.
+  JOB_PRIORITY_HIGHER = 3;
+
+  // Immediate priority jobs are queued in separate queue which must emptied before any other priority jobs can be scheduled.
+  JOB_PRIORITY_IMMEDIATE = 4;
+}
+
+// State of a job. Related to JobState.
+enum JobState {
+  // The job is unknown or in an unknown state.
+  JOB_STATE_UNKNOWN = 0;
+
+  // The job has been accepted and queued by the server, but has not yet started running.
+  JOB_STATE_PENDING = 1;
+
+  // The job is currently running.
+  JOB_STATE_RUNNING = 2;
+
+  // The job has stopped running.
+  JOB_STATE_STOPPED = 3;
+}
+
+// Status of a job. Related to JobStatus.
+enum JobStatus {
+  // The job is unknown or in an unknown status.
+  JOB_STATUS_UNKNOWN = 0;
+
+  // The job is healthy; if stopped, it has completed successfully.
+  JOB_STATUS_HEALTHY = 1;
+
+  // The job has encountered a terminal error.
+  JOB_STATUS_FAULTED = 2;
+
+  // The job has been cancelled
+  JOB_STATUS_CANCELED = 3;
+}
+
+// Parameters for Jobs::Cancel rpc.
+message JobsCancelRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Unique identifier of the job to cancel.
+  Identifier job_id = 2;
+
+  // Message to describe reason(s) the job was cancelled.
+  string reason = 3;
+}
+
+// Results of Jobs::Cancel rpc.
+message JobsCancelResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+
+  // Unique identifier of the job.
+  Identifier job_id = 2;
+
+  // Current state of the job.
+  JobState job_state = 3;
+
+  // Current status of the job.
+  JobStatus job_status = 4;
+}
+
+// Parameters for Jobs::Create rpc.
+message JobsCreateRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Unique identifier of the pipeline the job will instance.
+  Identifier pipeline_id = 2;
+
+  // Human readable name to be assigned to the job.
+  string name = 3;
+
+  // Priority to be assigned to the job.
+  JobPriority priority = 4;
+
+  // None or more static payloads to include as input for the job.
+  // Input payloads must be PAYLOAD_TYPE_STATIC.
+  // Input payloads will be copied into the "~/input/" folder of the job's storage payload in the order provided.
+  // Any name collisions during content copy will result in an error.
+  repeated Identifier input_payloads = 5;
+}
+
+// Results of Jobs::Create rpc.
+message JobsCreateResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+
+  // Unique identifier of the newly created job.
+  Identifier job_id = 2;
+
+  // Unique payload identifier of the newly created job.
+  Identifier payload_id = 3;
+}
+
+// Parameters for Jobs::List rpc.
+message JobsListRequest {
+  message JobFilter {
+    // When applied, only jobs completed before the supplied date will be returned.
+    Timestamp completed_before = 1;
+
+    // When applied, only jobs created after the supplied date will be returned.
+    Timestamp created_after = 2;
+
+    // When applied, only jobs having a provided state value will be returned.
+    repeated JobState has_state = 3;
+
+    // When applied, only jobs with matching status values will be returned.
+    repeated JobStatus has_status = 4;
+
+    // When applied, only jobs with matching pipeline identifiers will be returned.
+    repeated Identifier pipeline_id = 5;
+  }
+
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Filters applied the possible list of jobs reported.
+  JobFilter filter = 2;
+}
+
+// Results of Job::List rpc.
+message JobsListResponse {
+  message JobDetails {
+    // Unique identifier of the job.
+    Identifier job_id = 1;
+
+    // Unique identifier of the payload associated with the job.
+    Identifier payload_id = 2;
+
+    // Unique identifier of the pipeline associated with the job.
+    Identifier pipeline_id = 3;
+
+    // Human readable name of the job.
+    string job_name = 4;
+
+    // Current state of the job.
+    JobState state = 5;
+
+    // Current status of the job.
+    JobStatus status = 6;
+
+    // Priority of the job.
+    JobPriority priority = 7;
+
+    // Timestamp describing when the job was created.
+    Timestamp created = 13;
+
+    // Timestamp describing when the job started execution.
+    // No value will be provided if the job has not yet started execution.
+    Timestamp started = 14;
+
+    // Timestamp describing when the job stopped execution.
+    // No value will be provided if the job has not yet stopped execution.
+    Timestamp stopped = 15;
+
+/*******
+ *  Timestamp Format:
+ *  UTC formatted string; UTC+00:00 time zone.
+ *  Example: 2020-02-20T20:15:43Z
+ *  See: https://en.wikipedia.org/wiki/Coordinated_Universal_Time
+*******/
+
+    // Timestamp describing when the job was created.
+    // [Deprecated] Use `created` instead.
+    string timestamp_created = 10 [deprecated = true];
+
+    // Timestamp describing when the job started.
+    // Value will not be provided if the job has not yet started.
+    // [Deprecated] Use `started` instead.
+    string timestamp_started = 11 [deprecated = true];
+
+    // Timestamp describing when the job was stopped.
+    // Value will not be provided if the job hsa not yet stopped.
+    // [Deprecated] Use `stopped` instead.
+    string timestamp_stopped = 12 [deprecated = true];
+  }
+
+  // Standard RPC response header (only included with first response in stream).
+  ResponseHeader header = 1;
+
+  // A job in the list. Note that this response is streamed, with a
+  // separate response per job being listed.
+  JobDetails job_details = 2;
+}
+
+// Parameters to Job::Start
+message JobsStartRequest {
+  message NamedValue {
+    // Name of the variable.
+    string name = 1;
+
+    // Value of the variable.
+    string value = 2;
+  }
+
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // The Job id for the job that should be started
+  Identifier job_id = 2;
+
+  // Set of key/value pairs to be passed into the job as it starts.
+  repeated NamedValue Variables = 3;
+}
+
+// Results of Job::Start rpc.
+message JobsStartResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+
+  // Priority of the job.
+  JobPriority priority = 4;
+
+  // Current state of the job.
+  JobState state = 2;
+
+  // Current status of the job.
+  JobStatus status = 3;
+}
+
+// Parameters for Jobs::Status rpc.
+message JobsStatusRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Unique identifier of the job status is requested for.
+  Identifier job_id = 2;
+}
+
+// Results of Jobs::Status rpc.
+message JobsStatusResponse {
+  message JobOperatorDetails {
+    // Human readable name of the job operator.
+    string name = 1;
+
+    // Current status of the job operator.
+    JobOperatorStatus status = 2;
+
+    // Timestamp describing when the operator was created.
+    // No value will be provided if the operator has not yet been initialized.
+    Timestamp created = 3;
+
+    // Timestamp describing when the operator started execution.
+    // No value will be provided if the operator has not yet started execution.
+    Timestamp started = 4;
+
+    // Timestamp describing when the operator stopped execution.
+    // No value will be provided if the operator has not yet stopped execution.
+    Timestamp stopped = 5;
+  }
+
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+
+  // Unique identifier of the job status is being reported on.
+  Identifier job_id = 2;
+
+  // Unique identifier of the pipeline the job is an instance of.
+  Identifier pipeline_id = 3;
+
+  // Unique identifier of the payload the job is assigned to.
+  Identifier payload_id = 4;
+
+  // Current state of the job.
+  JobState state = 5;
+
+  // Current status of the job.
+  JobStatus status = 6;
+
+  // Human readable name of the job.
+  string name = 7;
+
+  // Priority of the job.
+  JobPriority priority = 9;
+
+  // Timestamp describing when the job was created.
+  Timestamp created = 13;
+
+  // Timestamp describing when the job started.
+  // Value will not be provided if the job has not yet started.
+  Timestamp started = 14;
+
+  // Timestamp describing when the job was stopped.
+  // Value will not be provided if the job hsa not yet stopped.
+  Timestamp stopped = 15;
+
+  // Operator status.
+  repeated JobOperatorDetails operator_details = 16;
+
+  // List of messages reported by the job.
+  repeated string messages = 8;
+
+/***
+ * Timestamp Format:
+ * UTC formatted string; UTC+00:00 time zone.
+ * Example: 2020-02-20T20:15:43Z
+ * See: https://en.wikipedia.org/wiki/Coordinated_Universal_Time
+***/
+
+  // Timestamp describing when the job was created.
+  // [Deprecated] Use `created` instead.
+  string timestamp_created = 10 [deprecated = true];
+
+  // Timestamp describing when the job started.
+  // Value will not be provided if the job has not yet started.
+  // [Deprecated] Use `started` instead.
+  string timestamp_started = 11 [deprecated = true];
+
+  // Timestamp describing when the job was stopped.
+  // Value will not be provided if the job hsa not yet stopped.
+  // [Deprecated] Use `stopped` instead.
+  string timestamp_stopped = 12 [deprecated = true];
+}
+
+service Jobs {
+  // Request cancellation of a running job.
+  rpc Cancel(JobsCancelRequest) returns (JobsCancelResponse);
+
+  // Requests creation of a new job based on a known pipeline.
+  rpc Create(JobsCreateRequest) returns (JobsCreateResponse);
+
+  // Requests a filtered list of all known jobs, or a list of all running jobs if no filter is provided.
+  rpc List(JobsListRequest) returns (stream JobsListResponse);
+
+  // Request starting of a job created by the Create RPC.
+  rpc Start(JobsStartRequest) returns (JobsStartResponse);
+
+  // Requests the status of a known job.
+  rpc Status(JobsStatusRequest) returns (JobsStatusResponse);
+
+  // Requests resource cleanup of pipeline services deployed as part of jobs.
+  rpc ClaraStop(ClaraStopRequest) returns (ClaraStopResponse);
+}
+
+
+message ModelDetails {
+  // Unique identifier of the model.
+  Identifier model_id = 1;
+  // The name of the model.
+  string name = 2;
+  // Type of the model.
+  ModelType type = 4;
+  // Metadata (set of name/value pairs) of the model.
+  map<string,string> tags = 8;
+}
+
+// Model types are closely related to the inference backend used by the model.
+enum ModelType {
+  // The type of the model is unknown.
+  MODEL_TYPE_UNKNOWN = 0;
+  // The model is based on the TensorFlow framework.
+  MODEL_TYPE_TENSOR_FLOW = 1;
+  // The model is based on the TensorRT framework.
+  MODEL_TYPE_TENSOR_RT = 2;
+  // The model is based on the PyTorch framework.
+  MODEL_TYPE_PY_TORCH = 3;
+}
+
+message ModelsDeleteModelRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+  // Unique identifier of the model to delete.
+  Identifier model_id = 2;
+}
+
+message ModelsDeleteModelResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+  // Unique identifier of the model.
+  Identifier model_id = 2;
+}
+
+message ModelsDownloadModelRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+  // Unique identifier of the model requested for download.
+  Identifier model_id = 2;
+}
+
+message ModelsDownloadModelResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+  // Details of the bundled model.
+  ModelDetails details = 2;
+  // Raw data of the bundled model.
+  bytes data = 4;
+}
+
+message ModelsListModelsRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+}
+
+message ModelsListModelsResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+  // List of model details.
+  repeated ModelDetails models = 2;
+}
+
+message ModelsUploadModelRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+  // Description of the model.
+  ModelDetails details = 2;
+  // Contents of Model, should be encoded via accepted ModelPackageType
+  bytes data = 4;
+}
+
+message ModelsUploadModelResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+  // Details of the uploaded model.
+  ModelDetails details = 2;
+}
+
+service Models {
+  rpc DeleteModel(ModelsDeleteModelRequest) returns (ModelsDeleteModelResponse);
+  // Requests the download of an existing model from the model store.
+  rpc DownloadModel(ModelsDownloadModelRequest) returns (stream ModelsDownloadModelResponse);
+  // Requests a list of available models from the model store.
+  rpc ListModels(ModelsListModelsRequest) returns (stream ModelsListModelsResponse);
+  // Requests the uploads of a new model to model store.
+  rpc UploadModel(stream ModelsUploadModelRequest) returns (ModelsUploadModelResponse);
+}
+
+
+
+
+
+// The type of payload, based on how the payload was created.
+enum PayloadType {
+  // The type of the payload is unknown.
+  PAYLOAD_TYPE_UNKNOWN = 0;
+
+  // The payload was created when a pipeline job was created and is intended to provide storage for its inputs and outputs.
+  PAYLOAD_TYPE_PIPELINE = 1;
+
+  // The payload is a reusable payload, intended to provide long-term storage and reusable inputs for pipeline jobs.
+  PAYLOAD_TYPE_REUSABLE = 2;
+}
+
+// Information about a file contained in a payload.
+message PayloadFileDetails {
+  // Mode of the file.
+  uint32 mode = 1;
+
+  // Size, in bytes, of the file.
+  uint64 size = 2;
+
+  // Unique (withing a payload) name of the file; in path format.
+  // File names are relative to the root of the payload, and should not be rooted paths (prefixed with a '/' character).
+  // File names are case-sensitive.
+  string name = 3;
+}
+
+// Parameters for Payloads::Create rpc.
+message PayloadsCreateRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+}
+
+// Result of Payloads::Create rpc.
+message PayloadsCreateResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+
+  // Unique identifier of the new payload.
+  Identifier payload_id = 2;
+
+  // Type of the payload.
+  PayloadType type = 5;
+}
+
+// Parameters for Payloads::Delete rpc.
+message PayloadsDeleteRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Unique identifier of the payload to delete.
+  Identifier payload_id = 2;
+}
+
+// Result of Payload::Delete rpc.
+message PayloadsDeleteResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+}
+
+// Parameters for Payloads::Details rpc.
+message PayloadsDetailsRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Unique identifier of the payload to query.
+  Identifier payload_id = 2;
+}
+
+// Result of Payload::Details rpc.
+message PayloadsDetailsResponse {
+  // Standard RPC response header (only included with first response in stream).
+  ResponseHeader header = 1;
+
+  // Unique identifier of the payload.
+  Identifier payload_id = 2;
+
+  // Details of a file contained in the payload. Note that this response is streamed, with a separate response for each file in the payload.
+  PayloadFileDetails file = 3;
+
+  // Type of the payload.
+  PayloadType type = 4;
+
+  // Unique Identifier of the job associated with the payload.
+  // Only provided when type = PAYLOAD_TYPE_PIPELINE.
+  Identifier job_id = 5;
+}
+
+// Parameters for Payloads::Download rpc.
+message PayloadsDownloadRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Unique identifier of the payload.
+  Identifier payload_id = 2;
+
+  // Unique (withing a payload) name of the file; in path format.
+  // File names are relative to the root of the payload, and should not be rooted paths (prefixed with a '/' character).
+  // File names are case-sensitive.
+  string name = 3;
+}
+
+// Result of Payloads::Download rpc.
+message PayloadsDownloadResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+
+  // Details about the file being downloaded.
+  PayloadFileDetails details = 2;
+
+  // Content of the file as raw bytes.
+  bytes data = 3;
+}
+
+// Parameters for Payloads::Remove rpc.
+message PayloadsRemoveRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Unique identifier of the payload.
+  Identifier payload_id = 2;
+
+  // Unique (withing a payload) name of the file; in path format.
+  // File names are relative to the root of the payload, and should not be rooted paths (prefixed with a '/' character).
+  // File names are case-sensitive.
+  string name = 3;
+}
+
+// Result of Payloads::Remove rpc.
+message PayloadsRemoveResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+}
+
+// Parameters for Payloads::Upload rpc.
+message PayloadsUploadRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+
+  // Unique identifier of the payload to upload content to.
+  Identifier payload_id = 2;
+
+  // Details about the file being uploaded.
+  PayloadFileDetails details = 3;
+
+  // Contents of the file as war bytes.
+  bytes data = 4;
+}
+
+// Result of Payload::Upload rpc.
+message PayloadsUploadResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+
+  // Details about the file uploaded.
+  PayloadFileDetails details = 2;
+}
+
+service Payloads {
+  // Requests the creation of a new payload.
+  rpc Create(PayloadsCreateRequest) returns (PayloadsCreateResponse);
+
+  // Requests the deletion of a known payload.
+  rpc Delete(PayloadsDeleteRequest) returns (PayloadsDeleteResponse);
+
+  // Requests the details (file listing) of a known payload.
+  rpc Details(PayloadsDetailsRequest) returns (stream PayloadsDetailsResponse);
+
+  // Requests the download of a blob (file) from a known payload.
+  rpc Download(PayloadsDownloadRequest) returns (stream PayloadsDownloadResponse);
+
+  // Requests the removal, or deltition, of a blob from a known payload.
+  rpc Remove(PayloadsRemoveRequest) returns (PayloadsRemoveResponse);
+
+  // Requests the upload of a blob (file) to a known payload.
+  // When payload type is PAYLOAD_TYPE_PIPELINE, uploads are written to the ~/input/ folder of the payload.
+  rpc Upload(stream PayloadsUploadRequest) returns (PayloadsUploadResponse);
+}
+
+
+
+
+
+// Information necissary to consume a pipeline definition file.
+message PipelineDefinitionFile {
+  // Path of the file, from a common root folder, including the file's name.
+  // Used to combine multi-file pipeline definitions.
+  // File paths are case-sensitive; and should not be rooted (begin with a '/' character).
+  string path = 1;
+  // The content of the definition file.
+  string content = 2;
+}
+
+// Parameters for Pipeline::Create rpc.
+message PipelinesCreateRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+  // A file in the definition of the pipeline.
+  // Expected format: YAML using the Clara Pipeline Definition schema.
+  // Note that this request is streamed to allow large pipeline definitions beyond
+  // the limits of a single GRPC message size. In the case of large pipelines, parts
+  // of the pipeline definition may be chunked into multiple parts such that the server
+  // will concatenate all parts having the same name into a single file server-side.
+  PipelineDefinitionFile definition = 2;
+}
+
+// Results of Pipeline::Create rpc.
+message PipelinesCreateResponse {
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+  // Unique identifier for the newly created pipeline.
+  Identifier pipeline_id = 2;
+}
+
+// Parameters for Pipeline::Details rpc.
+message PipelinesDetailsRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+  // Unique identifier of a pipeline.
+  Identifier pipeline_id = 2;
+}
+
+// Results of Pipeline::Details rpc.
+message PipelinesDetailsResponse {
+  message PipelineDagNode {
+    // Name of the operator (stage).
+    string name = 1;
+    // Represents the next stage(s) of pipeline execution.
+    repeated PipelineDagNode next = 2;
+  }
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+  // Unique identifier of the pipeline.
+  Identifier pipeline_id = 2;
+  // Human readable name of the pipeline.
+  string name = 3;
+  // A file in the definition of the pipeline.
+  // Note that this is streamed; see chunking comment in PipelinesCreateRequest.
+  PipelineDefinitionFile definition = 4;
+  // A directed acyclic graph [DAG] representing the execution of the pipeline.
+  // Repeated element because pipeline DAG can start or end with as many nodes as necessary.
+  repeated PipelineDagNode dag = 5;
+}
+
+// Parameters for Pipeline::List rpc.
+message PipelinesListRequest {
+  // Standard RPC request header.
+  RequestHeader header = 1;
+}
+
+// Results of Pipeline::List rpc.
+message PipelinesListResponse {
+  message PipelineDetails {
+    Identifier pipeline_id = 1;
+    // Human readable name of the pipeline.
+    string name = 2;
+  }
+
+  // Standard RPC response header.
+  ResponseHeader header = 1;
+  // A pipeline in the list known by the server. Note that this response is
+  // streamed, with a separate response per pipeline being listed.
+  PipelineDetails details = 2;
+}
+
+// Parameters for Pipeline::Remove rpc.
+message PipelinesRemoveRequest {
+  // Standard request header.
+  RequestHeader header = 1;
+  // Unique identifier of the pipeline to remove.
+  Identifier pipeline_id = 2;
+}
+
+// Results of Pipeline::Remove rpc.
+message PipelinesRemoveResponse {
+  // Standard response header.
+  ResponseHeader header = 1;
+}
+
+// Parameters for Pipeline::Update rpc.
+message PipelinesUpdateRequest {
+  // Standard request header.
+  RequestHeader header = 1;
+  // Unique identifier of the pipeline to update.
+  Identifier pipeline_id = 2;
+  // A file in the definition of the pipeline.
+  // Expected format: YAML using the Clara Pipeline Definition schema.
+  // Note that this is streamed; see chunking comment in PipelinesCreateRequest.
+  PipelineDefinitionFile definition = 3;
+}
+
+// Results of Pipeline::Update rpc.
+message PipelinesUpdateResponse {
+  // Standard response header.
+  ResponseHeader header = 1;
+}
+
+service Pipelines {
+  // Requests the creation of a new pipeline.
+  rpc Create(stream PipelinesCreateRequest) returns (PipelinesCreateResponse);
+  // Requests details of a pipeline.
+  rpc Details(PipelinesDetailsRequest) returns (stream PipelinesDetailsResponse);
+  // Requests a listing of all pipelines known by the service.
+  rpc List(PipelinesListRequest) returns (stream PipelinesListResponse);
+  // Requests the removal of a pipeline definition from the service.
+  rpc Remove(PipelinesRemoveRequest) returns (PipelinesRemoveResponse);
+  // Requests an update to a known pipeline definition.
+  rpc Update(stream PipelinesUpdateRequest) returns (PipelinesUpdateResponse);
+}
