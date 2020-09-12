@@ -1,7 +1,7 @@
 const express = require('express');
 const grpc = require('grpc');
 
-const { PipelinesClient } = require('../utils/grpc');
+const { PipelinesClient } = require('../utils/grpc/common');
 
 const router = express.Router();
 
