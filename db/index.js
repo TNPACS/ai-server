@@ -8,7 +8,11 @@ module.exports = {
     return new Promise(function (resolve, reject) {
       mongoose.connect(
         mongoUri,
-        { useNewUrlParser: true, useUnifiedTopology: true },
+        {
+          useNewUrlParser: true,
+          useUnifiedTopology: true,
+          useFindAndModify: false,
+        },
         function (err) {
           if (err) reject(err);
           console.log("Connected to database");

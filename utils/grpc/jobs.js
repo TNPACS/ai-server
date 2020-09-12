@@ -1,4 +1,3 @@
-const grpc = require("grpc");
 const fs = require("fs-extra");
 const klaw = require("klaw");
 const path = require("path");
@@ -27,12 +26,35 @@ function uploadAndStartJob(seriesInstanceUid, pipelineId) {
       const jobId = result.job_id;
       const payloadId = result.payload_id;
 
-      console.log('Result = ');
-      console.log(result);
-
       await uploadInput(inputDirectory, payloadId);
       const startJobResult = await startJob(jobId);
-      resolve(startJobResult);
+      resolve({
+        result: startJobResult,
+        jobId,
+        payloadId,
+      });
+    });
+  });
+}
+
+function getJobStatus(jobId) {
+  return new Promise(function (resolve, reject) {
+    const jobStatusRequest = {
+      header,
+      job_id: {
+        value: jobId,
+      },
+    };
+
+    JobsClient.status(jobStatusRequest, function (err, result) {
+      if (err) reject(err);
+
+      if (result.header.code < 0) {
+        reject();
+      }
+
+      const { state, status } = result;
+      resolve({ state, status });
     });
   });
 }
@@ -113,7 +135,7 @@ function startJob(jobId) {
         console.error(err);
         reject(err);
       }
-      console.log(`Started job ${jobId.value}. Result:`);
+      console.log(`Started job ${jobId.value}:`);
       console.log(result);
       resolve(result);
     });
@@ -122,4 +144,5 @@ function startJob(jobId) {
 
 module.exports = {
   uploadAndStartJob,
+  getJobStatus,
 };
