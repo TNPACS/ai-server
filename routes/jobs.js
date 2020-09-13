@@ -1,5 +1,6 @@
 const express = require("express");
 const fs = require("fs-extra");
+const path = require("path");
 const cron = require("node-cron");
 
 const { uploadAndStartJob, getJobStatus } = require("../utils/grpc/jobs");
@@ -9,6 +10,7 @@ const { JobState, JobStatus } = require("../utils/constants");
 const router = express.Router();
 
 const multer = require("multer");
+const { downloadOutputs } = require("../utils/grpc/payloads");
 const storage = multer.diskStorage({
   destination: async function (req, file, cb) {
     const { id } = req.params;
@@ -37,7 +39,7 @@ router.post("/", upload.none(), async function (req, res) {
 
   const existingJob = await Job.findOne({
     seriesInstanceUid,
-    pipelineId
+    pipelineId,
   });
 
   if (!!existingJob) return res.json(existingJob);
@@ -81,7 +83,12 @@ router.post("/:id", upload.any(), async function (req, res) {
 router.get("/:id/start", async function (req, res) {
   const { id } = req.params;
   const job = await Job.findById(id);
+
+  if (job.status === "in_progress" || job.status === "completed")
+    return res.status(200).send("Job already started");
+
   const { result, jobId, payloadId } = await uploadAndStartJob(
+    id,
     job.seriesInstanceUid,
     job.pipelineId
   );
@@ -90,7 +97,7 @@ router.get("/:id/start", async function (req, res) {
   job.status = "in_progress";
   await job.save();
 
-  // check 30 seconds
+  // check every 30 seconds
   let task;
   task = cron.schedule("*/30 * * * * *", async function () {
     console.log(`Checking job status: ${jobId.value}`);
@@ -99,16 +106,30 @@ router.get("/:id/start", async function (req, res) {
       if (status === JobStatus.JOB_STATUS_HEALTHY) {
         job.status = "completed";
         console.log(`Job ${jobId.value} completed`);
+        task.stop();
+
+        console.log(`Downloading outputs for job ${jobId.value}`);
+        job.outputs = await downloadOutputs(payloadId.value);
+        console.log(`Downloaded outputs for job ${jobId.value}`);
+        await job.save();
       } else {
         job.status = "failed";
         console.log(`Job ${jobId.value} failed`);
+
+        await job.save();
+        task.stop();
       }
-      await job.save();
-      task.stop();
     }
   });
 
   res.json(job);
+});
+
+router.get("/:id/outputs/:filename", async function (req, res) {
+  const { id, filename } = req.params;
+  const job = await Job.findById(id);
+  const { payloadId } = job;
+  res.sendFile(path.join(__dirname, `../output/${payloadId}/${filename}`));
 });
 
 module.exports = router;

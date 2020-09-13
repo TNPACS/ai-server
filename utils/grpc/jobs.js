@@ -3,9 +3,9 @@ const klaw = require("klaw");
 const path = require("path");
 const { JobsClient, PayloadsClient, header } = require("./common");
 
-function uploadAndStartJob(seriesInstanceUid, pipelineId) {
+function uploadAndStartJob(jobMongoId, seriesInstanceUid, pipelineId) {
   return new Promise(function (resolve, reject) {
-    const jobName = `${seriesInstanceUid}-${pipelineId}`;
+    const jobName = jobMongoId;
     const jobCreateRequest = {
       header,
       pipeline_id: {
@@ -14,7 +14,7 @@ function uploadAndStartJob(seriesInstanceUid, pipelineId) {
       name: jobName,
     };
 
-    const inputDirectory = `input/${jobName}`;
+    const inputDirectory = `input/${seriesInstanceUid}-${pipelineId}`;
 
     JobsClient.create(jobCreateRequest, async function (err, result) {
       if (err) reject(err);
@@ -77,15 +77,16 @@ function uploadInput(inputDirectory, payloadId) {
     const buffer = Buffer.alloc(64 * 1024);
 
     // read input files into buffer and create upload request
+    let uploadPromises = [];
     for await (const file of klaw(inputDirectory)) {
       if (file.stats.isDirectory()) continue;
 
       const fileName = path.basename(file.path);
       const fileSize = file.stats.size;
       const fd = await fs.open(file.path, "r");
-      console.log(`=== Uploading file ${fileName} - file size ${fileSize} ===`);
 
       let pos = 0;
+      let index = 0;
       while (pos < fileSize) {
         const { bytesRead, data } = await fs.read(
           fd,
@@ -103,19 +104,26 @@ function uploadInput(inputDirectory, payloadId) {
             size: fileSize,
             name: fileName,
           },
-          data: buffer.slice(0, bytesRead),
+          data: Buffer.alloc(bytesRead, buffer),
         };
 
-        await new Promise(function (resolve, reject) {
-          requestStream.write(request, 0, function () {
-            console.log(`Uploaded chunk: ${bytesRead}`);
-            resolve();
-          });
-        });
+        uploadPromises.push(
+          new Promise(function (resolve, reject) {
+            requestStream.write(request, 0, function () {
+              console.log(
+                `Uploaded chunk ${index} of file ${fileName}: ${bytesRead}`
+              );
+              index++;
+              resolve();
+            });
+          })
+        );
       }
 
-      console.log(`Finished uploading file ${fileName}`);
+      await fs.close(fd);
     }
+
+    await Promise.all(uploadPromises);
 
     requestStream.end();
     console.log("================================");

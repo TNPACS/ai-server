@@ -12,6 +12,7 @@ const jobSchema = new mongoose.Schema({
     enum: ["pending", "in_progress", "completed", "failed"],
     default: "pending",
   },
+  outputs: [String]
 });
 
 module.exports = mongoose.model("Job", jobSchema);

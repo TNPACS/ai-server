@@ -4,7 +4,7 @@ const grpc = require('grpc');
 const fs = require('fs-extra');
 const klaw = require('klaw');
 const path = require('path');
-const { header} = require('./utils/grpc');
+const { header} = require('./utils/grpc/common');
 
 // const connectionString = "localhost:30013";
 // const credentials = grpc.credentials.createInsecure();
@@ -32,7 +32,7 @@ const PayloadsClient = new PayloadsService(connectionString, credentials);
 const jobCreateRequest = {
   header,
   pipeline_id: {
-    value: "27b3c569fff141608c62ee25f9787674"
+    value: "8899fb8848f6448298da2014568fdb4a"
   },
   name: "test"
 };
